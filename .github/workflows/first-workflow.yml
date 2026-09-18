@@ -1,0 +1,147 @@
+# My first GitHub Actions workflow (onboarding step 6)
+#
+# It exists to demonstrate the four kinds of variables described in
+# docs/github-actions-variables.md:
+#   1. `github` context variables   -> ${{ github.actor }}
+#   2. Default environment variables -> $RUNNER_OS
+#   3. Custom variables (workflow/job/step `env:` + repo `vars.`)
+#   4. Secrets                       -> ${{ secrets.GITHUB_TOKEN }}
+#
+# Runs on every push to main, on pull requests targeting main, and on demand
+# from the Actions tab ("Run workflow" button -> workflow_dispatch).
+
+name: First workflow
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      greeting:
+        description: "Greeting to print in the first job"
+        required: false
+        default: "Hello from GitHub Actions"
+        type: string
+
+# Least privilege for the built-in token: we only need to read this repository.
+permissions:
+  contents: read
+
+# (3a) Workflow-level custom variables - visible to every job and step below.
+env:
+  TEAM_NAME: Datacom
+  PROJECT: github-onboarding
+
+jobs:
+  greet-and-report:
+    name: Greet and report variables
+    runs-on: ubuntu-latest
+
+    # (3b) Job-level custom variable.
+    env:
+      STAGE: validation
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------
+      # (1) github context variables - use the ${{ }} expression syntax
+      # ------------------------------------------------------------------
+      - name: Context variables (github.*)
+        run: |
+          echo "Triggered by ......... ${{ github.event_name }}"
+          echo "Actor ................ ${{ github.actor }}"
+          echo "Repository ........... ${{ github.repository }}"
+          echo "Ref .................. ${{ github.ref }}"
+          echo "Branch ............... ${{ github.ref_name }}"
+          echo "Commit SHA ........... ${{ github.sha }}"
+          echo "Run #${{ github.run_number }} (id ${{ github.run_id }})"
+          echo "Workflow / job ....... ${{ github.workflow }} / ${{ github.job }}"
+          echo "Repository link ...... ${{ github.server_url }}/${{ github.repository }}"
+
+      # ------------------------------------------------------------------
+      # (2) Default environment variables - plain shell variables, no ${{ }}
+      # ------------------------------------------------------------------
+      - name: Runner environment variables
+        run: |
+          echo "Runner OS ............ $RUNNER_OS"
+          echo "Runner arch .......... $RUNNER_ARCH"
+          echo "Runner name .......... $RUNNER_NAME"
+          echo "Workspace ............ $GITHUB_WORKSPACE"
+          echo "Running in CI ........ $GITHUB_ACTIONS"
+          echo "Commit (from env) .... $GITHUB_SHA"
+          echo "Current directory .... $(pwd)"
+
+      # ------------------------------------------------------------------
+      # (3) Custom variables: workflow env, job env, step env and UI vars
+      # ------------------------------------------------------------------
+      - name: Custom variables
+        env:
+          # (3c) Step-level variable - the narrowest scope.
+          GREETING: ${{ github.event.inputs.greeting || 'Hello from GitHub Actions' }}
+        run: |
+          echo "$GREETING!"
+          echo "Team ................. $TEAM_NAME"
+          echo "Project .............. $PROJECT"
+          echo "Stage ................ $STAGE"
+          # A repository configuration variable (Settings -> Secrets and
+          # variables -> Actions -> Variables). Falls back when not defined,
+          # so the workflow works straight after cloning.
+          echo "Repo variable ........ ${{ vars.OWNER_TEAM || 'not set (add vars.OWNER_TEAM in repo settings)' }}"
+
+      # ------------------------------------------------------------------
+      # Step outputs: create a variable at run time, reuse it later
+      # ------------------------------------------------------------------
+      - name: Capture a timestamp
+        id: stamp
+        run: |
+          NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "now=$NOW" >> "$GITHUB_OUTPUT"
+          echo "Timestamp captured: $NOW"
+
+      - name: Reuse the step output
+        run: echo "The previous step ran at ${{ steps.stamp.outputs.now }}"
+
+      # ------------------------------------------------------------------
+      # (4) Secrets - never interpolate them into the script text.
+      #     Pass them through `env:` so GitHub can mask them in the logs.
+      # ------------------------------------------------------------------
+      - name: Use the built-in GITHUB_TOKEN secret safely
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Token length is ${#GH_TOKEN} characters (value stays masked)."
+          echo "Calling the GitHub API for $GITHUB_REPOSITORY ..."
+          curl --silent --fail \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY" \
+            | grep -E '"(full_name|default_branch|private)"' || echo "(API call skipped)"
+
+      # ------------------------------------------------------------------
+      # Prove that the checkout really contains this repository
+      # ------------------------------------------------------------------
+      - name: Show the repository contents
+        run: |
+          echo "Files in $GITHUB_WORKSPACE:"
+          ls -la
+          echo "Last commit: $(git log -1 --oneline)"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## :wave: First workflow finished"
+            echo ""
+            echo "| Variable | Value |"
+            echo "| --- | --- |"
+            echo "| Trigger | \`${GITHUB_EVENT_NAME}\` |"
+            echo "| Actor | \`${{ github.actor }}\` |"
+            echo "| Ref | \`${{ github.ref_name }}\` @ \`${GITHUB_SHA:0:7}\` |"
+            echo "| Runner | \`$RUNNER_OS\` / \`$RUNNER_ARCH\` |"
+            echo "| Team | \`$TEAM_NAME\` |"
+            echo "| Finished at | \`${{ steps.stamp.outputs.now }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
