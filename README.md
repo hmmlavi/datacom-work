@@ -19,6 +19,7 @@ workflow**.
 | 4 | Clone the empty repository locally | :white_check_mark: | [docs/git-setup-windows.md → §4](docs/git-setup-windows.md#4-clone-the-empty-repository-to-your-machine-step-4) |
 | 5 | Understand variables | :white_check_mark: | [docs/github-actions-variables.md](docs/github-actions-variables.md) |
 | 6 | Create the first GitHub Actions workflow | :white_check_mark: | [.github/workflows/first-workflow.yml](.github/workflows/first-workflow.yml) |
+| 7 | Troubleshoot common Git and GitHub errors | :white_check_mark: | [docs/git-troubleshooting.md](docs/git-troubleshooting.md) |
 
 ---
 
